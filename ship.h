@@ -50,10 +50,8 @@ public:
     //double fcTonsRoute(const std::vector<int>& knots, const i1& tempCel, const d1& shipDeg_toConvention, const d1& windDeg_toConvention,
         //const d1& windMag, const d1& waveDeg_toConvention, const d1& swh, const d1& pp1d, const d1& time, const i1& gammaIdx, const double eff);
 
-    //NEW CODE START
-    //int  getNRotorF() const, getNSail() const;
-    //void setNRotorF(const int& n), setNSail(const int& n), setRotorScale(const double& s), setSailScale(const double& s);
-    //NEW CODE END
+    int  getNRotorF() const, getNSail() const;
+    void setNRotorF(const int& n), setNSail(const int& n), setRotorScale(const double& s), setSailScale(const double& s);
 
     // Compatibility wrapper for callers that expect per hour output
     double fcTonsPerHr(int knots, const int& tempCel, const double& shipDeg_toConvention, const double& windDeg_toConvention, const double& windMag,
