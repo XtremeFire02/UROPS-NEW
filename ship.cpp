@@ -180,7 +180,12 @@ double ship::fcTonsPerNm(int knots, const int& tempCel, const double& shipDeg_to
 
     cout << "nRotorF " << nRotorF << " nSail " << nSail << endl;
 
-    //sct integration
+    // Always consider the baseline (no wind-aid) power
+    const double P_base = R_total * wave::meterPerSecOfOneKnot;      // Eq 15 of [8]
+    double P_best = P_base;
+    double R_for_eff = max(R_calm, R_total);
+
+    // sct integration: enable rotor only when net power drops below baseline
     if (nRotorF > 0)
     {
         const double windFromDeg = wave::swapAngleConvention(windDeg_toConvention);
@@ -194,7 +199,14 @@ double ship::fcTonsPerNm(int knots, const int& tempCel, const double& shipDeg_to
 
         cout << "rotor f = " << f << " p = " << p << endl;
 
-        P_total = (R_total - f) * wave::meterPerSecOfOneKnot + p;
+        const double R_with = max(0.0, R_total - f);
+        const double P_with = R_with * wave::meterPerSecOfOneKnot + p;
+
+        if (P_with < P_best)
+        {
+            P_best = P_with;
+            R_for_eff = max(R_calm, R_with);
+        }
     }
     else if (nSail > 0)
     {
@@ -206,15 +218,21 @@ double ship::fcTonsPerNm(int knots, const int& tempCel, const double& shipDeg_to
 
         cout << "sail f = " << f << endl;
 
-        P_total = (R_total - f) * wave::meterPerSecOfOneKnot;
-    }
-    else
-    {
-        P_total = R_total * wave::meterPerSecOfOneKnot;      //Eq 15 of [8], no knots give fcTonPerNm
+        const double R_with = max(0.0, R_total - f);
+        const double P_with = R_with * wave::meterPerSecOfOneKnot;
+
+        if (P_with < P_best)
+        {
+            P_best = P_with;
+            R_for_eff = max(R_calm, R_with);
+        }
     }
 
+    // Selected power and matching prop efficiency
+    P_total = P_best;
+
     prop p(this, knots, tempCel);
-    propEff = p.getEff(max(R_calm, R_total));
+    propEff = p.getEff(R_for_eff);
 
     if (effIn > 1 || effIn < wave::ep)
     {
