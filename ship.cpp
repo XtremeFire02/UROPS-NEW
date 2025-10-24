@@ -1,6 +1,7 @@
+#include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <algorithm>
+#include <memory>
 
 #include "prop.h"
 #include "ship.h"
@@ -391,7 +392,6 @@ int ship::getServiceSpeed() const
     return serviceSpeed;
 }
 
-/*
 int ship::getNRotorF() const { return nRotorF; }
 int ship::getNSail() const { return nSail; }
 
@@ -399,12 +399,20 @@ int ship::getNSail() const { return nSail; }
 void ship::setNRotorF(const int& n)
 {
     nRotorF = clamp(n, 0, ship::maxRotorF);
+
+    if (nRotorF > 0)
+        nSail = 0; // ensure only one assist type is active
+
     windAidVec.clear();
 }
 
 void ship::setNSail(const int& n)
 {
     nSail = clamp(n, 0, ship::maxSails);
+
+    if (nSail > 0)
+        nRotorF = 0; // ensure only one assist type is active
+
     windAidVec.clear();
 }
 
@@ -427,7 +435,6 @@ void ship::setSailScale(const double& s)
     else
         sailScale = s;
 }
-*/
 
 pair<int, int> ship::idxOfUniformTable(const double& v, const double& lb, const int& size, const double& step)
 {
@@ -462,16 +469,8 @@ void ship::makeWindAidVec(const int& _knotsLb, const int& _knotsSize)
         return;
     }
 
-    //const int knotsLb = getMinSpeed();
-    //const int knotsUb = getMaxSpeed();
-    //const int knotsSize = knotsUb - knotsLb + 1;
-
-    //sct integration comment out the below 2 lines
-
-    //sct required only for testing, does not work without this
-    //windKnotsLb = knotsLb;
-    //windKnotsSize = knotsSize;
-    //
+    windKnotsLb = _knotsLb;
+    windKnotsSize = _knotsSize;
 
     windAidVec.reserve(ship::windAid_windMagSize);
 
@@ -603,21 +602,24 @@ pair<double, double> ship::getWindAid_byTable(const int& knots, const double& sh
 
     const auto wIdx = ship::idxOfUniformTable(windMag, 0, ship::windAid_windMagSize, ship::windAid_windMagStep); //0 = lb
 
-    if (wIdx.first == wIdx.second)
+    const double wLowMag = wIdx.first * ship::windAid_windMagStep;
+    const double wHighMag = wIdx.second * ship::windAid_windMagStep;
+
+    if (wIdx.first == wIdx.second || std::fabs(wHighMag - wLowMag) < wave::ep)
     {
         const pair<double, double> v = interpolatePair(wIdx.first);
 
-        return{v.first, v.second};
+        return {v.first, v.second};
     }
     else
     {
         const pair<double, double> wLow = interpolatePair(wIdx.first);
         const pair<double, double> wHigh = interpolatePair(wIdx.second);
 
-        const double f = wave::interpolate(wIdx.first, wIdx.second, wLow.first, wHigh.first, windMag);
-        const double p = wave::interpolate(wIdx.first, wIdx.second, wLow.second, wHigh.second, windMag);
+        const double f = wave::interpolate(wLowMag, wHighMag, wLow.first, wHigh.first, windMag);
+        const double p = wave::interpolate(wLowMag, wHighMag, wLow.second, wHigh.second, windMag);
 
-        return{f, p};
+        return {f, p};
     }
 }
 

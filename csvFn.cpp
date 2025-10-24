@@ -1,5 +1,6 @@
 #include "csvFn.h"
 
+#include <algorithm>
 #include <fstream>
 #include <filesystem>
 #include <iostream>

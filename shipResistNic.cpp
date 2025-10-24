@@ -2,9 +2,11 @@
 #include "shipV.h"
 #include "wave.h"
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <vector>
 
 using namespace std;
 
@@ -198,6 +200,27 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    std::vector<int> shipKnots;
+    shipKnots.reserve(wayPts.size());
+
+    for (const auto& wp : wayPts)
+    {
+        const int k = static_cast<int>(std::lround(wp.shipKnots));
+
+        if (k > 0)
+            shipKnots.emplace_back(k);
+    }
+
+    if (shipKnots.empty())
+    {
+        std::cout << "No waypoints with positive speed" << endl;
+        return 1;
+    }
+
+    const auto [minIt, maxIt] = std::minmax_element(shipKnots.begin(), shipKnots.end());
+    const int knotsLb = *minIt;
+    const int knotsSize = *maxIt - knotsLb + 1;
+
     const string shipLabel = shipP->getLabel();
 
     const std::string var = "knots";
@@ -222,28 +245,12 @@ int main(int argc, char** argv)
             s->setRotorScale(0.9);
             s->setSailScale(0.9);
 
+            s->makeTable(knotsLb, knotsSize);
+
             double sum = 0.0;
             int count = 0;
 
             std::cout << "\n==== " << title << " run ====\n";
-
-            // Optionally: print one sample assist (calculated via the byTable API)
-            // Use the first waypoint that has a positive speed
-            for (size_t wpIdx = 0; wpIdx < wayPts.size(); ++wpIdx) {
-                const auto& wp = wayPts[wpIdx];
-                const int knots = static_cast<int>(std::round(wp.shipKnots));
-                if (knots <= 0) continue;
-
-                const double shipToDeg = wp.shipBearing;                 // to_convention
-                const double windFromDeg = wave::swapAngleConvention(wp.windBearing); // convert to FROM
-                auto [thrustN, powerW] = s->getWindAid_byTable(
-                    knots, shipToDeg, windFromDeg, wp.windMag);
-
-                std::cout << title << " sample @ wp " << wpIdx
-                    << "   Thrust (N): " << thrustN
-                    << "   Power (W): " << powerW << "\n";
-                break; // just one sample line
-            }
 
             // Now the full average fuel loop (same as your original, but using 's')
             for (size_t wpIdx = 0; wpIdx < wayPts.size(); ++wpIdx)
