@@ -1,0 +1,3 @@
+ShipLabel,Comments,ShipTy(t/g/b/a/c/r),LenOverall(m),LenPerpendiculars(m),Beam(m),Draft(m),MaxDraft(m),DisplacementVol(m^3),BulbousBowTransverseArea(m^2),SFOC(g/kwh),ks(micrometer;hullRoughness),SternTy(p/v/u/n),HullForm(v/u/n),DWT(tons;int),FuelCap(tons;int;neg=unused),MinSpeed(kts;int),MaxSpeed(kts;int),ServiceSpeed(kts;int),NumRotorF(0..4;int),RotorScale(0..1),NumSail(0..2;int), SailScale(0..1)
+HandymaxBulker1,NoComments,b,190,185,32,12,12,53000,12,170,150,u,u,44000,150,10,16,14,0,1,0,1
+HandymaxBulker2,NoComments,b,190,185,32,12,12,53000,12,170,150,u,u,44000,150,10,16,14,0,1,0,1
