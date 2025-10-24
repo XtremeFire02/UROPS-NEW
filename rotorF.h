@@ -172,7 +172,7 @@ public:
     //As informed, each vessel will feature a 5m x 24m Dealfeng rotorF sail installed on its forecastle deck.
 
     //Also see Figure 4 of Wind-Assisted Ship Propulsion: Matching Flettner Rotors with Diesel Engines and Controllable Pitch Propellers
-    double getForce(const double& windMag, const double& shipBearing, const double& windBearing)
+    double getForce(const double& windMag, const double& shipBearing_to, const double& windBearing_from)
     {
         if (numRotor <= 0)
             return 0.0;
@@ -193,8 +193,12 @@ public:
         // reduce to 0..180 and convert to inflow angle about ship axis
         //double beta = (rel <= 180.0) ? rel : (360.0 - rel);
 
-        double beta{wave::relAngleDegMod180(windBearing, shipBearing)}; //sct
-        double alpha{wave::degToRad(180.0 - beta)};
+        // Ensure both bearings use the same convention as required by relAngleDegMod180.
+        // Inputs: shipBearing is TO-convention; windBearing is FROM-convention.
+        // Convert ship bearing to FROM-convention to match wind.
+        const double shipBearing_from{wave::swapAngleConvention(shipBearing_to)};
+        const double beta{wave::relAngleDegMod180(windBearing_from, shipBearing_from)};
+        const double alpha{wave::degToRad(180.0 - beta)};
 
         const double q{sail::halfRhoAir * V * V};
         const double T_one = q * (CL_S * std::sin(alpha) - CD_S * std::cos(alpha));
@@ -208,8 +212,11 @@ private:
     int numRotor{0};
     // --- constants for the power model ---
 
-    const double SR{3.0};       // spin ratio (matches your thrust model)
-    const double Cf{0.008};     // friction/drive coefficient (~few x 1e-3)
+    // Spin ratio. Lower SR reduces power (∝ SR^3) faster than thrust (∝ SR).
+    const double SR{2.0};
+    // Friction/drive coefficient. A value around 0.003–0.006 is more realistic
+    // for large smooth rotors at high Re; use a conservative mid value.
+    const double Cf{0.0045};
     const double etaMR{0.60};      //mech/electrical efficiency, must not be 0 else div by 0
 
     // Rotor geometry (close to your comments: 5m x 24~30m + end plates)

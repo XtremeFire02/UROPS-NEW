@@ -181,7 +181,9 @@ double ship::fcTonsPerNm(int knots, const int& tempCel, const double& shipDeg_to
     cout << "nRotorF " << nRotorF << " nSail " << nSail << endl;
 
     // Always consider the baseline (no wind-aid) power
-    const double P_base = R_total * wave::meterPerSecOfOneKnot;      // Eq 15 of [8]
+    // Use actual ship speed in m/s, not 1 knot.
+    const double ship_mps = wave::knotsToMeterPerSec(knots);
+    const double P_base = R_total * ship_mps;      // Eq 15 of [8]
     double P_best = P_base;
     double R_for_eff = max(R_calm, R_total);
 
@@ -200,7 +202,7 @@ double ship::fcTonsPerNm(int knots, const int& tempCel, const double& shipDeg_to
         cout << "rotor f = " << f << " p = " << p << endl;
 
         const double R_with = max(0.0, R_total - f);
-        const double P_with = R_with * wave::meterPerSecOfOneKnot + p;
+        const double P_with = R_with * ship_mps + p;
 
         if (P_with < P_best)
         {
@@ -219,7 +221,7 @@ double ship::fcTonsPerNm(int knots, const int& tempCel, const double& shipDeg_to
         cout << "sail f = " << f << endl;
 
         const double R_with = max(0.0, R_total - f);
-        const double P_with = R_with * wave::meterPerSecOfOneKnot;
+        const double P_with = R_with * ship_mps;
 
         if (P_with < P_best)
         {
@@ -239,7 +241,10 @@ double ship::fcTonsPerNm(int knots, const int& tempCel, const double& shipDeg_to
         effIn = propEff;
     }
 
-    return P_total * 1e-9 * sfoc / effIn;      // Power / 1000 to get kWh, multiply by SFOC (g/kWh) to get fc_gPerHr * 1e-6
+    // Convert power to fuel per hour (tons/hr): P[W] -> kW, *SFOC[g/kWh] -> g/h, -> tons/h
+    // Then convert to per nautical mile by dividing by speed in knots.
+    const double fc_tons_per_hr = P_total * 1e-9 * sfoc / effIn;      // tons/hr
+    return fc_tons_per_hr / std::max(1, knots);                        // tons/nm
 }
 
 double ship::fcTonsPerHr(int knots, const int& tempCel,
