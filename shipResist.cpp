@@ -5,6 +5,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <algorithm>
 
 using namespace std;
 
@@ -141,8 +142,8 @@ using namespace std;
 
 int main(int argc, char** argv)
 {
-    string shipFile = "shipHandy.csv"; //sct integration
-    string wayPtFile = "simulation.csv"; // "simulation.csv";
+    string shipFile = "shipHandy.csv"; // default ship list
+    string wayPtFile = "simulation.csv"; // default route; pass a CSV to override
 
     if (argc >= 3)
     {
@@ -167,125 +168,100 @@ int main(int argc, char** argv)
 
     //----
 
-    shipV shipList(shipFile, 1); //sct integration
-    //const int nRows = shipList.getRowCount();
+    shipV shipList(shipFile, 0); // start with first row; we will switch rows below
 
-    //const int idx{0}; //use row0 of file
-    //shipList.setNewRowIdx(idx);
-
-    ship* shipP = shipList.shipPtr();
-
-    if (shipP == nullptr)
+    const int nRows = shipList.getRowCount();
+    if (nRows <= 0)
     {
-        std::cout << "invalid ship" << endl;
+        std::cout << "No ships loaded from " << shipFile << endl;
         return 1;
     }
 
-    const string shipLabel = shipP->getLabel(); //sct integration
 
-    const std::string var = "knots";
-    //shipParams.writeFuelCurveCsv(var, waypoints, shipParams, "output.csv");
-    
-
+    auto avg_for_row = [&](int rowIdx) -> pair<string, double>
     {
-        int knots{16};
-        int temp{26};
+        shipList.setNewRowIdx(rowIdx);
+        ship* s = shipList.shipPtr();
+        if (!s)
+            return {string("Row ") + to_string(rowIdx), 0.0};
 
-        double shipB{0};
-        double windB{90};
-        double windM{5.56612};
-        double waveB{90};
-        double swh{4};
-        double pp1d{1};
-
+        // Optional: prebuild tables for rotor/sail cases to speed lookups
+        // Build knots range from waypoints
         vector<int> shipKnots;
-
+        shipKnots.reserve(wayPts.size());
         for (const auto& it : wayPts)
         {
             const int k = static_cast<int>(std::lround(it.shipKnots));
+            if (k > 0) shipKnots.emplace_back(k);
+        }
+        if (!shipKnots.empty())
+        {
+            const int knotsLb = *min_element(shipKnots.begin(), shipKnots.end());
+            const int knotsSize = *max_element(shipKnots.begin(), shipKnots.end()) - knotsLb + 1;
+            s->makeTable(knotsLb, knotsSize);
+        }
 
-            if (k > 0)
+        double sum{0};
+        int count{0};
+
+        for (size_t wpIdx = 0; wpIdx < wayPts.size(); wpIdx++)
+        {
+            const auto& wp = wayPts[wpIdx];
+            const int knots = static_cast<int>(std::round(wp.shipKnots));
+            if (knots <= 0) continue;
+
+            const double shipDeg_toConvention = wp.shipBearing;
+            const double windDeg_toConvention = wp.windBearing;
+            const double waveDeg_toConvention = wp.waveBearing;
+            const int tempCel = static_cast<int>(std::round(wp.temp2m));
+            const double windMag = wp.windMag;
+            const double swh = wp.swh;
+            const double pp1d = wp.pp1d;
+            const int gammaIdx = 0; // PM (idx of 1.0 in jsGammaVec)
+
+            const double fcTonsPerNm = s->fcTonsPerNm(knots, tempCel, shipDeg_toConvention, windDeg_toConvention, windMag, waveDeg_toConvention, swh, pp1d, gammaIdx);
+            const double fcTonsPerHr = fcTonsPerNm * knots;
+
+            if (fcTonsPerHr > wave::ep)
             {
-                //cout << "k " << k << endl;
-                shipKnots.emplace_back(k);
+                sum += fcTonsPerHr;
+                count++;
             }
         }
 
-        const int knotsLb = *min_element(shipKnots.begin(), shipKnots.end());
-        const int knotsSize = *max_element(shipKnots.begin(), shipKnots.end()) - knotsLb + 1;
+        const string label = s->getLabel();
+        const double avgHr = count > 0 ? sum / count : 0.0;
+        std::cout << "Ship: " << label << "   wayPtCount: " << count
+                  << "   Avg tonsPerHr: " << avgHr
+                  << "   Avg tonsPerDay: " << (avgHr * 24.0) << endl;
 
-        std::cout << "byTable knotsLb: " << knotsLb << " knotsSize: " << knotsSize << endl;
-        shipP->makeTable(knotsLb, knotsSize);
+        return {label, avgHr};
+    };
 
-        const int gammaIdx = 0;
+    // Run for each row and report. If there are >=3 rows, assume 0=baseline, 1=rotor, 2=sail (shipHandy.csv layout)
+    vector<pair<string, double>> results;
+    for (int i = 0; i < nRows; i++)
+        results.emplace_back(avg_for_row(i));
 
-        cout << "shipLabel " << shipP->getLabel() << endl; //sct integration
-
-        const auto fcTonsPerNm = shipP->fcTonsPerNm(knots, temp, shipB, windB, windM, waveB, swh, pp1d, gammaIdx);
-        std::cout << "fcTonsPerHr " << fcTonsPerNm * knots << endl;
-
-        std::cout << "----" << endl;
-
-        const auto fcTonsPerNmVec = shipP->fcTonsPerNm_byTable(knots, temp, shipB, windB, windM, waveB, swh, pp1d, gammaIdx);
-        std::cout << "fcTonsPerHrByVec " << fcTonsPerNmVec * knots << endl;
-
-        std::cout << "----" << endl;
-    }
-    
-    return 1; //sct make it return here
-
-
-    double sum{0};
-    int count{0};
-    size_t wpMax = 1; //use just 1 wayPt
-
-    for (int wpIdx = 0; wpIdx < wayPts.size(); wpIdx++)
+    if (!results.empty())
     {
-        const auto& wp = wayPts[wpIdx];
-
-        const int knots = static_cast<int>(round(wp.shipKnots));
-
-        const double shipDeg_toConvention = wp.shipBearing;
-        const double windDeg_toConvention = wp.windBearing;
-        const double waveDeg_toConvention = wp.waveBearing;
-
-        const int tempCel = static_cast<int>(round(wp.temp2m));
-
-        const double windMag = wp.windMag;
-
-        const double swh = wp.swh;
-        const double pp1d = wp.pp1d;
-        const double speed = wp.shipKnots;
-
-        if (knots <= 0)
-            continue;
-
-        const int gammaIdx = 0; //wave::jsGammaVec{1.0, 3.3}, so 0 = PM, 1 = gamma3.3
-
-        //cout << "pp1d: " << pp1d << endl;
-
-        //all bearing in waypoint uses to_convention, fcTonsPerNm will take in to_convention
-        //std::cout << "shipBearing: " << shipDeg_toConvention << " windBearing: " << windDeg_toConvention << " waveBearing: " << waveDeg_toConvention << endl;
-
-        const double fcTonsPerNm = shipP->fcTonsPerNm(knots, tempCel, shipDeg_toConvention, windDeg_toConvention, windMag, waveDeg_toConvention, swh, pp1d, gammaIdx);
-
-        const double fcTonsPerHr = fcTonsPerNm * knots;
-
-        if (fcTonsPerHr > wave::ep)
+        const double base = results.front().second;
+        std::cout << "\nSummary (relative to baseline: " << results.front().first << ")" << endl;
+        for (size_t i = 0; i < results.size(); i++)
         {
-            std::cout << speed << endl;
-            std::cout << fcTonsPerHr * 24 << endl;
-            sum += fcTonsPerHr;
-            count++;
-
-            const double filterLb{1.9};
-
-            if (fcTonsPerHr < filterLb)
-                std::cout << "wpIdx " << wpIdx << " filter val < " << filterLb << ", fcTonsPerHr: " << fcTonsPerHr << endl;
+            const auto& [lbl, v] = results[i];
+            if (i == 0)
+            {
+                std::cout << "  " << lbl << ": " << v << " tons/hr" << endl;
+            }
+            else
+            {
+                const double savingPct = base > wave::ep ? 100.0 * (base - v) / base : 0.0;
+                std::cout << "  " << lbl << ": " << v << " tons/hr   Saving: " << savingPct << " %" << endl;
+            }
         }
     }
 
-    std::cout << endl << "wayPtCount: " << count << " Average tonsPerHr: " << sum / count << " Average tonsPerDay: " << sum / count * 24 << endl;
     std::cout << endl << argv[0] << " " << shipFile << " " << wayPtFile << endl;
 
     return 0;
