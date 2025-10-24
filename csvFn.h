@@ -43,6 +43,14 @@ public:
 private:
 
     void clear();
-    static std::optional<Waypoint> parseLine(const std::string& line);
+    std::optional<Waypoint> parseLine(const std::string& line);
+
+    // Parse header to build column index mapping
+    bool parseHeader(const std::string& headerLine);
+    static std::vector<std::string> splitCSV(const std::string& line);
+
+    // Column indices for required fields; -1 if not present
+    std::vector<int> colIdx; // ordered as: lat,lon,z,forceOcean,shipKnots,nmTravelled,hoursUsed,fuelTonsConsumed,fuelTonsPerNM,shipBearing,windBearing,waveBearing,windMag,swh,pp1d,temp2m
+    bool hasHeader{false};
 };
 #endif
